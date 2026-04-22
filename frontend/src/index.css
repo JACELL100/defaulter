@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --bg: #f4f8ed;
+  --surface: #ffffff;
+  --ink: #12211b;
+  --muted: #52635a;
+  --brand: #ee5f3a;
+  --brand-soft: #ffd7be;
+  --signal: #1ea896;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Space Grotesk', sans-serif;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(30, 168, 150, 0.18), transparent 30%),
+    radial-gradient(circle at 90% 15%, rgba(238, 95, 58, 0.22), transparent 35%),
+    radial-gradient(circle at 70% 80%, rgba(35, 93, 130, 0.18), transparent 32%),
+    var(--bg);
+  color: var(--ink);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(18, 33, 27, 0.08);
+  box-shadow: 0 20px 45px rgba(18, 33, 27, 0.08);
+}
+
+.gradient-stroke {
+  position: relative;
+}
+
+.gradient-stroke::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, rgba(238, 95, 58, 0.55), rgba(30, 168, 150, 0.45));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.soft-grid {
+  background-image:
+    linear-gradient(rgba(18, 33, 27, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 33, 27, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.float {
+  animation: floatY 7s ease-in-out infinite;
+}
+
+.float-delay {
+  animation: floatY 8.2s ease-in-out infinite;
+  animation-delay: 1s;
+}
+
+.pulse-ring {
+  animation: pulseRing 2.7s ease-out infinite;
+}
+
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
