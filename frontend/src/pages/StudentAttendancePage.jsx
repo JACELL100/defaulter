@@ -1,12 +1,13 @@
 export default function StudentAttendancePage({ summaryRows }) {
   return (
-    <section className="glass-panel gradient-stroke rounded-2xl p-5">
-      <h3 className="text-xl">My Attendance Across Subjects</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        Live subjectwise attendance with exam eligibility status.
-      </p>
+    <section className="glass-panel gradient-stroke rounded-2xl p-6 md:p-8">
+      <div className="mx-auto max-w-full">
+        <h3 className="text-xl font-bold text-slate-900">My Attendance Across Subjects</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Live subjectwise attendance with exam eligibility status.
+        </p>
 
-      <div className="mt-4 space-y-3">
+        <div className="mt-6 space-y-4">
         {summaryRows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center text-sm text-slate-500">
             No attendance records found yet.
@@ -54,6 +55,7 @@ export default function StudentAttendancePage({ summaryRows }) {
             )
           })
         )}
+      </div>
       </div>
     </section>
   )

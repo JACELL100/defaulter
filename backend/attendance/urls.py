@@ -11,6 +11,7 @@ from .views import (
     LectureViewSet,
     MarkLectureAttendanceView,
     ProfileView,
+    RegisteredStudentListView,
     SubjectEnrollmentViewSet,
     SubjectViewSet,
     UserProfileViewSet,
@@ -27,6 +28,7 @@ router.register("attendance-records", AttendanceRecordViewSet, basename="attenda
 
 urlpatterns = [
     path("auth/me/", ProfileView.as_view(), name="auth-me"),
+    path("students/registered/", RegisteredStudentListView.as_view(), name="registered-students"),
     path("dashboard/stats/", DashboardStatsView.as_view(), name="dashboard-stats"),
     path("attendance/summary/", AttendanceSummaryView.as_view(), name="attendance-summary"),
     path("attendance/defaulters/", DefaulterListView.as_view(), name="attendance-defaulters"),

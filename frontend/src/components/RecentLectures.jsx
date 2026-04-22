@@ -1,10 +1,10 @@
 export default function RecentLectures({ lectures }) {
   return (
-    <section className="glass-panel gradient-stroke rounded-2xl p-5">
-      <h3 className="text-xl">Recent Lectures</h3>
-      <p className="mt-1 text-sm text-slate-600">Fresh classroom activity log.</p>
+    <section className="glass-panel gradient-stroke rounded-2xl p-6 md:p-8">
+      <h3 className="text-xl font-bold text-slate-900">Recent Lectures</h3>
+      <p className="mt-2 text-sm text-slate-600">Fresh classroom activity log.</p>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-6 space-y-2">
         {lectures.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white/60 px-3 py-6 text-center text-sm text-slate-500">
             No lectures yet.

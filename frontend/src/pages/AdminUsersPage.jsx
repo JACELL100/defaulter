@@ -2,13 +2,14 @@ import { roleBadge } from '../lib/ui'
 
 export default function AdminUsersPage({ profiles, onRoleUpdate }) {
   return (
-    <section className="glass-panel gradient-stroke rounded-2xl p-5">
-      <h3 className="text-xl">Role Control Panel</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        Promote users to teacher/admin or move them back to student.
-      </p>
+    <section className="glass-panel gradient-stroke rounded-2xl p-6 md:p-8">
+      <div className="mx-auto max-w-full">
+        <h3 className="text-xl font-bold text-slate-900">Role Control Panel</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Promote users to teacher/admin or move them back to student.
+        </p>
 
-      <div className="mt-4 max-h-[560px] overflow-auto rounded-xl border border-slate-200 bg-white">
+        <div className="mt-6 max-h-[560px] overflow-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full min-w-[680px] text-left text-sm">
           <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
@@ -43,6 +44,7 @@ export default function AdminUsersPage({ profiles, onRoleUpdate }) {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </section>
   )

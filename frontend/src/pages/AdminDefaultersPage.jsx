@@ -1,12 +1,13 @@
 export default function AdminDefaultersPage({ defaulters }) {
   return (
-    <section className="glass-panel gradient-stroke rounded-2xl p-5">
-      <h3 className="text-xl">Global Defaulters</h3>
-      <p className="mt-1 text-sm text-slate-600">
-        Institution-wide list of students below 75% attendance in a subject.
-      </p>
+    <section className="glass-panel gradient-stroke rounded-2xl p-6 md:p-8">
+      <div className="mx-auto max-w-full">
+        <h3 className="text-xl font-bold text-slate-900">Global Defaulters</h3>
+        <p className="mt-2 text-sm text-slate-600">
+          Institution-wide list of students below 75% attendance in a subject.
+        </p>
 
-      <div className="mt-4 max-h-[520px] space-y-2 overflow-auto pr-1">
+        <div className="mt-6 max-h-[520px] space-y-2 overflow-auto pr-1">
         {defaulters.length === 0 ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-10 text-center text-sm text-emerald-700">
             Great news, no defaulters at the moment.
@@ -27,6 +28,7 @@ export default function AdminDefaultersPage({ defaulters }) {
             </div>
           ))
         )}
+      </div>
       </div>
     </section>
   )

@@ -37,8 +37,8 @@ export default function AppShell({ profile, onSignOut, loadingData, toast, child
       <BackgroundDecor />
       <div className="soft-grid absolute inset-0 opacity-35" />
 
-      <div className="relative mx-auto grid max-w-7xl gap-4 lg:grid-cols-[270px_1fr]">
-        <aside className="glass-panel gradient-stroke rounded-2xl p-5 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
+      <div className="relative mx-auto grid w-full max-w-[1680px] gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="glass-panel gradient-stroke rounded-2xl p-5 xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)]">
           <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-100 px-3 py-1 text-xs font-semibold tracking-wide text-orange-700">
             <Sparkles className="h-3.5 w-3.5" />
             Smart Attendance
@@ -61,7 +61,7 @@ export default function AppShell({ profile, onSignOut, loadingData, toast, child
           </div>
         </aside>
 
-        <section className="space-y-4">
+        <section className="min-w-0 space-y-4">
           <header className="glass-panel gradient-stroke rounded-2xl p-4 md:p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>

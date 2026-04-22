@@ -38,7 +38,9 @@ Modern college attendance platform with role-based workflows for admin, teacher,
    - `python -m pip install -r requirements.txt`
 4. Apply migrations:
    - `python manage.py migrate`
-5. Start server:
+5. Seed demo classrooms, subjects, and lecture topics:
+   - `python manage.py seed_demo_data`
+6. Start server:
    - `python manage.py runserver`
 
 API root: `http://127.0.0.1:8000/api`

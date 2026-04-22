@@ -22,6 +22,7 @@ from .serializers import (
 	ClassRoomSerializer,
 	EnrollmentSerializer,
 	LectureSerializer,
+	RegisteredStudentSerializer,
 	RoleUpdateSerializer,
 	SubjectEnrollmentSerializer,
 	SubjectSerializer,
@@ -143,6 +144,27 @@ class UserProfileViewSet(viewsets.ReadOnlyModelViewSet):
 		profile.save(update_fields=["role", "updated_at"])
 
 		return Response(UserProfileSerializer(profile).data)
+
+
+class RegisteredStudentListView(APIView):
+	permission_classes = [IsAuthenticated, IsTeacherOrAdmin]
+
+	def get(self, request):
+		current_user = request.user
+		subject_id = request.query_params.get("subject_id")
+
+		if current_user.role == UserProfile.Role.TEACHER and subject_id:
+			if not Subject.objects.filter(id=subject_id, teacher=current_user).exists():
+				raise PermissionDenied(
+					"Teachers can load registered students only for their own subjects."
+				)
+
+		students = UserProfile.objects.filter(
+			role=UserProfile.Role.STUDENT,
+			is_active=True,
+		).order_by("full_name")
+
+		return Response(RegisteredStudentSerializer(students, many=True).data)
 
 
 class ClassRoomViewSet(viewsets.ModelViewSet):
@@ -401,10 +423,15 @@ class MarkLectureAttendanceView(APIView):
 			if not student:
 				raise ValidationError({"student_id": f"Invalid student id: {entry['student_id']}"})
 
-			if not SubjectEnrollment.objects.filter(student=student, subject=lecture.subject).exists():
-				raise ValidationError(
-					{"student_id": f"Student {student.full_name} is not enrolled in this subject."}
-				)
+			# Direct attendance marking should work for any registered student.
+			SubjectEnrollment.objects.get_or_create(student=student, subject=lecture.subject)
+			academic_year = f"{lecture.lecture_date.year}-{lecture.lecture_date.year + 1}"
+			Enrollment.objects.update_or_create(
+				student=student,
+				class_room=lecture.class_room,
+				academic_year=academic_year,
+				defaults={"is_active": True},
+			)
 
 			AttendanceRecord.objects.update_or_create(
 				lecture=lecture,

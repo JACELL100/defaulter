@@ -13,10 +13,10 @@ export default function DashboardOverviewPage({ profile, stats, lectures }) {
       <MotionSection
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel gradient-stroke rounded-2xl p-5"
+        className="glass-panel gradient-stroke rounded-2xl p-6 md:p-8"
       >
-        <h3 className="text-xl">Role Snapshot</h3>
-        <p className="mt-1 text-sm text-slate-600">
+        <h3 className="text-xl font-bold text-slate-900">Role Snapshot</h3>
+        <p className="mt-2 text-sm text-slate-600">
           {profile.role === 'teacher'
             ? 'Mark lecture attendance, monitor risky students, and keep classes exam-ready.'
             : null}

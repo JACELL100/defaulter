@@ -30,6 +30,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "auth_user_id", "created_at", "updated_at"]
 
 
+class RegisteredStudentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            "id",
+            "full_name",
+            "email",
+            "enrollment_number",
+            "department",
+            "semester",
+        ]
+
+
 class ClassRoomSerializer(serializers.ModelSerializer):
     advisor_name = serializers.CharField(source="advisor.full_name", read_only=True)
 
