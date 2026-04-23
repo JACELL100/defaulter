@@ -1,3 +1,4 @@
+import random
 from datetime import timedelta
 import uuid
 
@@ -6,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from attendance.models import (
+    AttendanceRecord,
     ClassRoom,
     Enrollment,
     Lecture,
@@ -142,9 +144,24 @@ DEMO_STUDENTS = [
     ("Zoya Ali", "zoya.ali.demo@campuspulse.local", "CSE24010"),
 ]
 
+# Attendance probability profiles to create realistic defaulters.
+# The index maps to each demo student; lower values create defaulters.
+ATTENDANCE_PROFILES = [
+    0.92,   # Aarav  – regular attender
+    0.88,   # Isha   – regular attender
+    0.55,   # Kunal  – DEFAULTER (will likely be < 75%)
+    0.78,   # Neha   – borderline
+    0.65,   # Ritika – DEFAULTER
+    0.95,   # Samar  – excellent
+    0.70,   # Tanvi  – DEFAULTER (borderline)
+    0.85,   # Vikram – regular
+    0.60,   # Yash   – DEFAULTER
+    0.82,   # Zoya   – regular
+]
+
 
 class Command(BaseCommand):
-    help = "Seed demo classrooms, subjects, lecture topics, and student enrollments."
+    help = "Seed demo classrooms, subjects, lecture topics, student enrollments, and random attendance records."
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -179,6 +196,7 @@ class Command(BaseCommand):
         )
 
         created_lectures = self._ensure_lectures(subjects, lectures_per_subject)
+        attendance_created = self._ensure_attendance_records(subjects, students)
 
         self.stdout.write(self.style.SUCCESS("Demo attendance data is ready."))
         self.stdout.write(f"Teachers created: {created_teachers}")
@@ -188,6 +206,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Class enrollments created/activated: {enrollment_count}")
         self.stdout.write(f"Subject enrollments created: {subject_enrollment_count}")
         self.stdout.write(f"Lectures created: {created_lectures}")
+        self.stdout.write(f"Attendance records created: {attendance_created}")
 
     def _ensure_teachers(self):
         created_count = 0
@@ -421,5 +440,68 @@ class Command(BaseCommand):
 
                     if created:
                         created_count += 1
+
+        return created_count
+
+    def _ensure_attendance_records(self, subjects, students):
+        """Generate random attendance records for every lecture/student pair.
+
+        Each student has a probability profile from ATTENDANCE_PROFILES that
+        controls how likely they are to be present.  This creates realistic
+        defaulter patterns where some students hover around/below 75%.
+        """
+        created_count = 0
+
+        # Build a map of student email -> probability so we can look up
+        # even if the student order isn't guaranteed.
+        email_to_probability = {}
+        for idx, (_, email, _) in enumerate(DEMO_STUDENTS):
+            email_to_probability[email] = ATTENDANCE_PROFILES[idx % len(ATTENDANCE_PROFILES)]
+
+        # Gather all lectures that belong to seeded subjects
+        all_subject_ids = set()
+        for class_subjects in subjects.values():
+            for subject in class_subjects:
+                all_subject_ids.add(subject.id)
+
+        lectures = list(Lecture.objects.filter(subject_id__in=all_subject_ids).select_related("subject"))
+
+        for lecture in lectures:
+            # Get enrolled students for this subject
+            enrolled_student_ids = set(
+                SubjectEnrollment.objects.filter(
+                    subject=lecture.subject,
+                ).values_list("student_id", flat=True)
+            )
+
+            enrolled_students = UserProfile.objects.filter(
+                id__in=enrolled_student_ids,
+                role=UserProfile.Role.STUDENT,
+                is_active=True,
+            )
+
+            for student in enrolled_students:
+                probability = email_to_probability.get(student.email, 0.80)
+
+                # Roll the dice
+                roll = random.random()
+                if roll < probability:
+                    att_status = AttendanceRecord.Status.PRESENT
+                elif roll < probability + 0.05:
+                    att_status = AttendanceRecord.Status.LATE
+                else:
+                    att_status = AttendanceRecord.Status.ABSENT
+
+                _, created = AttendanceRecord.objects.get_or_create(
+                    lecture=lecture,
+                    student=student,
+                    defaults={
+                        "status": att_status,
+                        "remarks": "",
+                    },
+                )
+
+                if created:
+                    created_count += 1
 
         return created_count

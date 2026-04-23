@@ -67,15 +67,10 @@ class SupabaseAuthentication(authentication.BaseAuthentication):
             },
         )
 
-        # Keep profile in sync with auth provider email/name changes.
-        changed = False
+        # Keep profile email in sync with auth provider changes.
+        # Note: full_name is NOT synced so manual edits (e.g. admin rename) are preserved.
         if profile.email != email:
             profile.email = email
-            changed = True
-        if default_name and profile.full_name != default_name:
-            profile.full_name = default_name
-            changed = True
-        if changed:
-            profile.save(update_fields=["email", "full_name", "updated_at"])
+            profile.save(update_fields=["email", "updated_at"])
 
         return (profile, token)

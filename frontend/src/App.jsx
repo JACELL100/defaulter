@@ -27,7 +27,9 @@ import AuthPage from './pages/AuthPage'
 import DashboardOverviewPage from './pages/DashboardOverviewPage'
 import StudentAttendancePage from './pages/StudentAttendancePage'
 import TeacherAttendancePage from './pages/TeacherAttendancePage'
-import TeacherDefaultersPage from './pages/TeacherDefaultersPage'
+import TeacherDefaultersPage, { generateDefaultersPDF } from './pages/TeacherDefaultersPage'
+import VoiceAgent from './components/VoiceAgent'
+import './components/VoiceAgent.css'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -68,6 +70,7 @@ function App() {
     window.setTimeout(() => setToast(null), 3600)
   }, [])
 
+  // ─── Load the student roster for a subject ───────────────────────────────
   const loadSubjectRoster = useCallback(
     async (subjectId, lectureDate, lectureNumber) => {
       if (!subjectId) {
@@ -76,140 +79,112 @@ function App() {
       }
 
       try {
+        // Primary: Django API — returns registered students (role=student, is_active=true)
         const { data: registeredStudents } = await api.get('/students/registered/', {
           params: { subject_id: subjectId },
         })
 
         let statusByStudent = new Map()
 
+        // Try to load any existing attendance for this lecture
         if (lectureDate && lectureNumber) {
-          const { data: lectureRows } = await api.get('/lectures/', {
-            params: {
-              subject_id: subjectId,
-              lecture_date: lectureDate,
-            },
-          })
-
-          const existingLecture = lectureRows.find(
-            (row) => Number(row.lecture_number) === Number(lectureNumber),
-          )
-
-          if (existingLecture) {
-            const { data: attendanceRows } = await api.get('/attendance-records/', {
-              params: { lecture_id: existingLecture.id },
+          try {
+            const { data: lectureRows } = await api.get('/lectures/', {
+              params: { subject_id: subjectId, lecture_date: lectureDate },
             })
 
-            statusByStudent = new Map(attendanceRows.map((row) => [row.student, row.status]))
+            const existingLecture = lectureRows.find(
+              (row) => Number(row.lecture_number) === Number(lectureNumber),
+            )
+
+            if (existingLecture) {
+              const { data: attendanceRows } = await api.get('/attendance-records/', {
+                params: { lecture_id: existingLecture.id },
+              })
+              statusByStudent = new Map(attendanceRows.map((row) => [row.student, row.status]))
+            }
+          } catch {
+            // Existing attendance load failed — not critical, continue with empty statuses
           }
         }
 
-        setAttendanceEntries(
-          registeredStudents.map((row) => ({
-            studentId: row.id,
-            studentName: row.full_name,
-            studentEmail: row.email,
-            status: statusByStudent.get(row.id) || '',
-          })),
-        )
-      } catch (error) {
-        // Use dummy data on error
+        // Map API response → attendanceEntries shape
+        const entries = registeredStudents.map((row) => ({
+          studentId: row.id,
+          studentName: row.full_name,
+          studentEmail: row.email,
+          status: statusByStudent.get(row.id) || '',
+        }))
+
+        setAttendanceEntries(entries)
+      } catch (err) {
+        console.warn('loadSubjectRoster API failed:', err?.message)
+        // Fallback: show dummy data so teacher can still mark
         setAttendanceEntries(DUMMY_ATTENDANCE_ENTRIES)
       }
     },
-    [showToast],
+    [],
   )
 
-  const loadDefaulters = useCallback(
-    async (subjectId = '') => {
-      try {
-        const params = {}
-        if (subjectId) {
-          params.subject_id = subjectId
-        }
+  // ─── Load defaulters ──────────────────────────────────────────────────────
+  const loadDefaulters = useCallback(async (subjectId = '') => {
+    try {
+      const params = {}
+      if (subjectId) params.subject_id = subjectId
 
-        const { data } = await api.get('/attendance/defaulters/', { params })
-        setDefaulters(data.results || [])
-      } catch (error) {
-        // Use dummy data on error
-        setDefaulters(DUMMY_DEFAULTERS)
-      }
-    },
-    [showToast],
-  )
+      const { data } = await api.get('/attendance/defaulters/', { params })
+      setDefaulters(data.results || [])
+    } catch (err) {
+      console.warn('loadDefaulters API failed:', err?.message)
+      setDefaulters(DUMMY_DEFAULTERS)
+    }
+  }, [])
 
+  // ─── Hydrate all dashboard data after login ───────────────────────────────
   const hydrateData = useCallback(
     async (currentProfile) => {
       setLoadingData(true)
-      
-      // Load dummy data immediately for better UX
-      if (currentProfile?.role === 'teacher') {
-        setStats(DUMMY_TEACHER_STATS)
-        setSubjects(DUMMY_SUBJECTS)
-        setLectures(DUMMY_LECTURES)
-        const defaultSubject = DUMMY_SUBJECTS[0]?.id || ''
-        setAttendanceForm((current) => ({
-          ...current,
-          subjectId: defaultSubject,
-          lectureDate: todayISO(),
-          lectureNumber: 1,
-        }))
-        setTeacherDefaulterSubjectId(defaultSubject)
-        setAttendanceEntries(DUMMY_ATTENDANCE_ENTRIES)
-        setDefaulters(DUMMY_DEFAULTERS)
-      } else if (currentProfile?.role === 'student') {
-        setStats(DUMMY_STUDENT_STATS)
-        setSubjects(DUMMY_SUBJECTS)
-        setLectures(DUMMY_LECTURES)
-        setSummaryRows(DUMMY_SUMMARY_ROWS)
-      } else if (currentProfile?.role === 'admin') {
-        setStats(DUMMY_ADMIN_STATS)
-        setSubjects(DUMMY_SUBJECTS)
-        setLectures(DUMMY_LECTURES)
-        setProfiles(DUMMY_PROFILES)
-        setDefaulters(DUMMY_DEFAULTERS)
-      }
-      
+
       try {
+        // Load subjects, lectures, stats concurrently
         const [statsRes, subjectsRes, lecturesRes] = await Promise.all([
           api.get('/dashboard/stats/'),
           api.get('/subjects/'),
           api.get('/lectures/'),
         ])
 
-        // Replace dummy data with real data if API succeeds
-        setStats(statsRes.data || (currentProfile?.role === 'teacher' ? DUMMY_TEACHER_STATS : currentProfile?.role === 'student' ? DUMMY_STUDENT_STATS : DUMMY_ADMIN_STATS))
-        setSubjects(subjectsRes.data || DUMMY_SUBJECTS)
-        setLectures(lecturesRes.data || DUMMY_LECTURES)
+        const realSubjects = subjectsRes.data?.length > 0 ? subjectsRes.data : DUMMY_SUBJECTS
+        const realLectures = lecturesRes.data?.length > 0 ? lecturesRes.data : DUMMY_LECTURES
+
+        setStats(statsRes.data || null)
+        setSubjects(realSubjects)
+        setLectures(realLectures)
 
         if (currentProfile.role === 'teacher') {
-          const realSubjects = subjectsRes.data && subjectsRes.data.length > 0 ? subjectsRes.data : DUMMY_SUBJECTS
-          const defaultSubject = realSubjects[0]?.id || ''
+          const defaultSubjectId = realSubjects[0]?.id || ''
           const defaultDate = todayISO()
-          const defaultLectureNumber = 1
+          const defaultLectureNum = 1
 
-          setAttendanceForm((current) => ({
-            ...current,
-            subjectId: defaultSubject,
+          setAttendanceForm((cur) => ({
+            ...cur,
+            subjectId: defaultSubjectId,
             lectureDate: defaultDate,
-            lectureNumber: defaultLectureNumber,
+            lectureNumber: defaultLectureNum,
           }))
-          setTeacherDefaulterSubjectId(defaultSubject)
+          setTeacherDefaulterSubjectId(defaultSubjectId)
 
-          if (defaultSubject) {
+          if (defaultSubjectId) {
             await Promise.all([
-              loadSubjectRoster(defaultSubject, defaultDate, defaultLectureNumber),
-              loadDefaulters(defaultSubject),
+              loadSubjectRoster(defaultSubjectId, defaultDate, defaultLectureNum),
+              loadDefaulters(defaultSubjectId),
             ])
-          } else {
-            setAttendanceEntries(DUMMY_ATTENDANCE_ENTRIES)
-            setDefaulters(DUMMY_DEFAULTERS)
           }
         }
 
         if (currentProfile.role === 'student') {
           try {
             const { data } = await api.get('/attendance/summary/')
-            setSummaryRows(data.results || DUMMY_SUMMARY_ROWS)
+            setSummaryRows(data.results?.length > 0 ? data.results : DUMMY_SUMMARY_ROWS)
           } catch {
             setSummaryRows(DUMMY_SUMMARY_ROWS)
           }
@@ -218,27 +193,28 @@ function App() {
         if (currentProfile.role === 'admin') {
           try {
             const [profileRes] = await Promise.all([api.get('/profiles/'), loadDefaulters()])
-            setProfiles(profileRes.data || DUMMY_PROFILES)
+            setProfiles(profileRes.data?.length > 0 ? profileRes.data : DUMMY_PROFILES)
           } catch {
             setProfiles(DUMMY_PROFILES)
           }
         }
-      } catch (error) {
-        // Use dummy data on error
+      } catch (err) {
+        console.warn('hydrateData API failed, using dummy data:', err?.message)
+
+        // Full dummy fallback
         const role = currentProfile?.role
-        
         if (role === 'teacher') {
           setStats(DUMMY_TEACHER_STATS)
           setSubjects(DUMMY_SUBJECTS)
           setLectures(DUMMY_LECTURES)
-          const defaultSubject = DUMMY_SUBJECTS[0]?.id || ''
-          setAttendanceForm((current) => ({
-            ...current,
-            subjectId: defaultSubject,
+          const defSub = DUMMY_SUBJECTS[0]?.id || ''
+          setAttendanceForm((cur) => ({
+            ...cur,
+            subjectId: defSub,
             lectureDate: todayISO(),
             lectureNumber: 1,
           }))
-          setTeacherDefaulterSubjectId(defaultSubject)
+          setTeacherDefaulterSubjectId(defSub)
           setAttendanceEntries(DUMMY_ATTENDANCE_ENTRIES)
           setDefaulters(DUMMY_DEFAULTERS)
         } else if (role === 'student') {
@@ -257,7 +233,7 @@ function App() {
         setLoadingData(false)
       }
     },
-    [loadDefaulters, loadSubjectRoster, showToast],
+    [loadDefaulters, loadSubjectRoster],
   )
 
   const fetchProfileAndData = useCallback(async () => {
@@ -293,13 +269,11 @@ function App() {
 
   const onSubjectSelect = useCallback(
     (subjectId) => {
-      setAttendanceForm((current) => ({ ...current, subjectId }))
-
+      setAttendanceForm((cur) => ({ ...cur, subjectId }))
       if (!subjectId) {
         setAttendanceEntries([])
         return
       }
-
       if (profile?.role === 'teacher') {
         loadSubjectRoster(subjectId, attendanceForm.lectureDate, attendanceForm.lectureNumber)
       }
@@ -309,8 +283,7 @@ function App() {
 
   const onLectureDateChange = useCallback(
     (lectureDate) => {
-      setAttendanceForm((current) => ({ ...current, lectureDate }))
-
+      setAttendanceForm((cur) => ({ ...cur, lectureDate }))
       if (profile?.role === 'teacher' && attendanceForm.subjectId) {
         loadSubjectRoster(attendanceForm.subjectId, lectureDate, attendanceForm.lectureNumber)
       }
@@ -320,8 +293,7 @@ function App() {
 
   const onLectureNumberChange = useCallback(
     (lectureNumber) => {
-      setAttendanceForm((current) => ({ ...current, lectureNumber }))
-
+      setAttendanceForm((cur) => ({ ...cur, lectureNumber }))
       if (profile?.role === 'teacher' && attendanceForm.subjectId) {
         loadSubjectRoster(attendanceForm.subjectId, attendanceForm.lectureDate, lectureNumber)
       }
@@ -330,12 +302,28 @@ function App() {
   )
 
   const onLectureTopicChange = useCallback((topic) => {
-    setAttendanceForm((current) => ({ ...current, topic }))
+    setAttendanceForm((cur) => ({ ...cur, topic }))
   }, [])
 
   const onAttendanceEntriesChange = useCallback((updater) => {
     setAttendanceEntries(updater)
   }, [])
+
+  const onMarkAllStatus = useCallback((status) => {
+    setAttendanceEntries((entries) =>
+      entries.map((entry) => ({ ...entry, status })),
+    )
+    showToast('success', `Marked all students as ${status}.`)
+  }, [showToast])
+
+  const onGenerateDefaultersPDF = useCallback(() => {
+    const success = generateDefaultersPDF(defaulters, subjects, profile?.full_name || 'Teacher')
+    if (success) {
+      showToast('success', 'PDF report downloaded successfully.')
+    } else {
+      showToast('error', 'No defaulters to export.')
+    }
+  }, [defaulters, subjects, profile?.full_name, showToast])
 
   const onTeacherDefaulterSubjectChange = useCallback(
     (subjectId) => {
@@ -345,13 +333,12 @@ function App() {
     [loadDefaulters],
   )
 
+  // ─── Auth lifecycle ───────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true
 
     supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) {
-        return
-      }
+      if (!mounted) return
 
       const nextSession = data.session || null
       setSession(nextSession)
@@ -382,14 +369,13 @@ function App() {
     }
   }, [fetchProfileAndData, resetDashboardState])
 
+  // ─── Auth handlers ────────────────────────────────────────────────────────
   const onEmailAuth = async (event) => {
     event.preventDefault()
-
     if (!hasSupabaseEnv) {
       showToast('error', 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.')
       return
     }
-
     setIsSubmitting(true)
     try {
       if (authMode === 'login') {
@@ -397,23 +383,15 @@ function App() {
           email: authForm.email,
           password: authForm.password,
         })
-        if (error) {
-          throw error
-        }
+        if (error) throw error
         showToast('success', 'Login successful.')
       } else {
         const { error } = await supabase.auth.signUp({
           email: authForm.email,
           password: authForm.password,
-          options: {
-            data: {
-              full_name: authForm.fullName,
-            },
-          },
+          options: { data: { full_name: authForm.fullName } },
         })
-        if (error) {
-          throw error
-        }
+        if (error) throw error
         showToast('success', 'Signup complete. Check your email if confirmation is enabled.')
       }
     } catch (error) {
@@ -428,19 +406,13 @@ function App() {
       showToast('error', 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.')
       return
     }
-
     setIsSubmitting(true)
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        },
+        options: { redirectTo: window.location.origin },
       })
-
-      if (error) {
-        throw error
-      }
+      if (error) throw error
     } catch (error) {
       showToast('error', error.message || 'Google authentication failed.')
       setIsSubmitting(false)
@@ -453,43 +425,41 @@ function App() {
     resetDashboardState()
   }
 
+  // ─── Attendance submission ────────────────────────────────────────────────
   const onMarkAttendance = async () => {
     if (!attendanceForm.subjectId) {
       showToast('error', 'Please choose a subject.')
       return
     }
-
     if (attendanceEntries.length === 0) {
       showToast('error', 'No students loaded for attendance.')
       return
     }
-
-    const pendingCount = attendanceEntries.filter((entry) => !entry.status).length
+    const pendingCount = attendanceEntries.filter((e) => !e.status).length
     if (pendingCount > 0) {
       showToast('error', `Please mark every student first. Pending: ${pendingCount}.`)
       return
     }
 
-    const subject = subjects.find((item) => item.id === attendanceForm.subjectId)
+    const subject = subjects.find((s) => s.id === attendanceForm.subjectId)
     if (!subject) {
       showToast('error', 'Invalid subject selected.')
       return
     }
 
     setAttendanceSaving(true)
-
     try {
       let lectureId = null
 
       try {
-        const lectureResponse = await api.post('/lectures/', {
+        const res = await api.post('/lectures/', {
           subject: attendanceForm.subjectId,
           class_room: subject.class_room,
           lecture_date: attendanceForm.lectureDate,
           lecture_number: Number(attendanceForm.lectureNumber),
           topic: attendanceForm.topic,
         })
-        lectureId = lectureResponse.data.id
+        lectureId = res.data.id
       } catch {
         const { data } = await api.get('/lectures/', {
           params: {
@@ -497,21 +467,17 @@ function App() {
             lecture_date: attendanceForm.lectureDate,
           },
         })
-
         const existing = data.find(
-          (row) => Number(row.lecture_number) === Number(attendanceForm.lectureNumber),
+          (r) => Number(r.lecture_number) === Number(attendanceForm.lectureNumber),
         )
-
-        if (!existing) {
-          throw new Error('Unable to create or locate lecture slot.')
-        }
+        if (!existing) throw new Error('Unable to create or locate lecture slot.')
         lectureId = existing.id
       }
 
       await api.post(`/lectures/${lectureId}/mark-attendance/`, {
-        entries: attendanceEntries.map((entry) => ({
-          student_id: entry.studentId,
-          status: entry.status,
+        entries: attendanceEntries.map((e) => ({
+          student_id: e.studentId,
+          status: e.status,
           remarks: '',
         })),
       })
@@ -538,25 +504,19 @@ function App() {
   const onRoleUpdate = async (profileId, role) => {
     try {
       await api.patch(`/profiles/${profileId}/set-role/`, { role })
-      setProfiles((current) => current.map((row) => (row.id === profileId ? { ...row, role } : row)))
+      setProfiles((cur) => cur.map((r) => (r.id === profileId ? { ...r, role } : r)))
       showToast('success', 'Role updated successfully.')
     } catch (error) {
       showToast('error', extractErrorMessage(error))
     }
   }
 
+  // ─── Route guard ──────────────────────────────────────────────────────────
   const renderRolePage = (allowedRoles, pageContent) => {
-    if (!session) {
-      return <Navigate to="/auth" replace />
-    }
-
-    if (!profile) {
-      return <FullScreenLoader label="Loading your role profile..." />
-    }
-
-    if (!allowedRoles.includes(profile.role)) {
+    if (!session) return <Navigate to="/auth" replace />
+    if (!profile) return <FullScreenLoader label="Loading your role profile..." />
+    if (!allowedRoles.includes(profile.role))
       return <Navigate to={getDefaultRoute(profile.role)} replace />
-    }
 
     return (
       <AppShell profile={profile} onSignOut={onSignOut} loadingData={loadingData} toast={toast}>
@@ -565,17 +525,12 @@ function App() {
     )
   }
 
-  if (loadingAuth) {
-    return <FullScreenLoader label="Checking your session..." />
-  }
+  if (loadingAuth) return <FullScreenLoader label="Checking your session..." />
 
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={<Navigate to={session ? defaultRoute : '/auth'} replace />}
-        />
+        <Route path="/" element={<Navigate to={session ? defaultRoute : '/auth'} replace />} />
 
         <Route
           path="/auth"
@@ -638,6 +593,7 @@ function App() {
               onSubjectChange={onTeacherDefaulterSubjectChange}
               defaulters={defaulters}
               onLoadDefaulters={loadDefaulters}
+              teacherName={profile?.full_name}
             />,
           )}
         />
@@ -668,6 +624,22 @@ function App() {
           element={<Navigate to={session ? defaultRoute : '/auth'} replace />}
         />
       </Routes>
+
+      {/* Voice Agent — visible for all logged-in users */}
+      {session && profile && (
+        <VoiceAgent
+          profile={profile}
+          subjects={subjects}
+          stats={stats}
+          defaulters={defaulters}
+          attendanceEntries={attendanceEntries}
+          setAttendanceEntries={setAttendanceEntries}
+          onMarkAllStatus={onMarkAllStatus}
+          onGenerateDefaultersPDF={onGenerateDefaultersPDF}
+          onSignOut={onSignOut}
+          showToast={showToast}
+        />
+      )}
     </BrowserRouter>
   )
 }
